@@ -1,1 +1,19 @@
-This work presents an exploratory data analysis and statistical inference study on a dataset of mobile phone specifications from 2025. The analysis begins with data cleaning and standardization to ensure consistency across numerical variables. Descriptive statistics and visualizations are used to characterize key features such as weight, battery capacity, price, camera specifications, screen size, and RAM, along with outlier detection using the interquartile range criterion. Normality is assessed through the Shapiro–Wilk test, indicating non-normal distributions for key variables. Correlation analysis and Pearson’s test reveal a weak but statistically significant positive relationship between RAM and launch price. Hypothesis testing is further applied through a one-sample t-test on mobile weight and a chi-square test of independence between battery capacity and price categories. Finally, a bootstrap procedure is used to assess uncertainty in the price interquartile range. Overall, the results illustrate how exploratory and inferential statistical methods can be combined to extract meaningful insights from real-world consumer technology data.
+# Statistical Exploration of Mobile Phone Features and Launch Prices
+
+## Project Overview
+This project presents an Exploratory Data Analysis (EDA) investigating the statistical correlation between mobile phone hardware features and their initial market launch prices. 
+
+By analyzing distributions and relationships across various technical specifications, the project aims to identify which features drive the cost of mobile devices.
+
+## Tech Stack & Tools
+- Language: R
+- Environment: RStudio / RMarkdown
+- Techniques: Exploratory Data Analysis (EDA), Descriptive Statistics, Data Visualization
+
+## How to Run the Project
+1. Navigate to this specific project directory.
+2. Open the .Rmd file in RStudio.
+3. Knit the document to generate the HTML report.
+
+---
+Developed by Valentín Turri as part of the Master's in Data Mining & Knowledge Discovery (UBA).

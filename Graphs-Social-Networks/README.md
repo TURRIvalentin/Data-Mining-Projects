@@ -1,11 +1,20 @@
-This research comparatively analyzes an institutional email network and a Facebook
-friendship network, based on the hypothesis that the former, due to its formal
-hierarchical structure, would exhibit more clearly defined communities. Both
-networks were topologically characterized, compared with classical generative
-models, centrality measures were computed, robustness under different types of
-attacks was evaluated, and community detection was applied using the Louvain
-algorithm. In the email network, the correspondence between communities and
-departments was also examined, as well as class assortativity. The results show that,
-although the institutional network clearly reflects the organizational structure, it is
-the Facebook network that exhibits greater modularity and more clearly defined
-clusters, which contradicts the initial hypothesis.
+# Topological Comparison of Social Networks
+
+## Project Overview
+This project explores the topological characteristics of social networks using graph theory. 
+
+The analysis focuses on network structures, centrality metrics, and community detection algorithms to understand the underlying dynamics and importance of nodes within social interactions.
+
+## Tech Stack & Tools
+- Language: Python 3
+- Libraries: NetworkX, Pandas, Matplotlib
+- Environment: Jupyter Notebook
+- Techniques: Graph Theory, Network Analysis, Topology
+
+## How to Run the Project
+1. Navigate to this specific project directory.
+2. Install the required dependencies: pip install networkx pandas matplotlib jupyter
+3. Run the Jupyter Notebook: jupyter notebook "Graphs_Social_Network.ipynb"
+
+---
+Developed by Valentín Turri as part of the Master's in Data Mining & Knowledge Discovery (UBA).

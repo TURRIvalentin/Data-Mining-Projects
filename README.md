@@ -1,12 +1,12 @@
-# Data Science & Statistical Analysis Portfolio 📊
+# Data Science & Statistical Analysis Portfolio
 
 Welcome to my consolidated portfolio of data science, machine learning, and statistical analysis projects. This repository contains various analytical solutions, ranging from advanced predictive modeling to fundamental statistical explorations, developed during my master's degree and personal research.
 
-## 📁 Repository Structure
+## Repository Structure
 
 Here is a breakdown of the projects included in this repository:
 
-### 🤖 Machine Learning & Deep Learning
+### Machine Learning & Deep Learning
 * **[Property-Price-Prediction-Using-Random-Forest](./Property-Price-Prediction-Using-Random-Forest)**
   * **Description:** An end-to-end predictive modeling project focused on estimating property prices using Random Forest regression.
   * **Technologies:** Python, Scikit-Learn, Pandas, Jupyter Notebook.
@@ -14,7 +14,7 @@ Here is a breakdown of the projects included in this repository:
   * **Description:** Advanced computer vision project utilizing unsupervised deep learning techniques (VGG16 for feature extraction and KMeans) for automatic image segmentation.
   * **Technologies:** Python, TensorFlow/Keras, Scikit-Learn, Computer Vision.
 
-### 📈 Statistical Analysis & Exploration
+### Statistical Analysis & Exploration
 * **[Principal-Component-Analysis-of-FIFA-2024-Men-Player-Attributes](./Principal-Component-Analysis-of-FIFA-2024-Men-Player-Attributes)**
   * **Description:** Application of PCA (Principal Component Analysis) to reduce dimensionality and extract key attributes of FIFA 2024 players.
 * **[Analysis-of-Teaching-Methods-using-ANOVA](./Analysis-of-Teaching-Methods-using-ANOVA)**
@@ -27,4 +27,4 @@ Here is a breakdown of the projects included in this repository:
   * **Description:** Graph theory application for analyzing and visualizing social network structures.
 
 ---
-*Created and maintained by [Valentín Turri](https://github.com/TURRIvalentin)*
+Created and maintained by [Valentín Turri](https://github.com/TURRIvalentin)
