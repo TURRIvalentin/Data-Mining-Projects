@@ -1,0 +1,232 @@
+---
+title: "Exploratory Data Analysis of Mobile Phone Specifications"
+author: "TURRI Valentín"
+date: "2025-04-18"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+# Global knitr options
+knitr::opts_chunk$set(echo = TRUE)
+
+# Required libraries
+library(readr)
+library(knitr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(tidyr)
+```
+
+## 1. Data
+
+```{r data, echo=TRUE}
+# Define path and read CSV
+path <- "C:/Users/valen/OneDrive/Escritorio/Maestría en Ciencia de Datos/AID/TP2/Mobiles Dataset (2025).csv"
+mobiles_data <- read_csv(path, locale = locale(encoding = "UTF-8"))
+```
+
+## 2. Data Cleaning and Standardization
+
+```{r cleaning_and_standardization, echo=TRUE}
+mobiles_data <- mobiles_data %>%
+  mutate(
+    `Mobile Weight [g]`      = as.numeric(str_remove(`Mobile Weight`, "g")),
+    `Battery Capacity [mAh]` = as.numeric(str_remove_all(str_remove(`Battery Capacity`, "mAh"), ",")),
+    `Launched Price [USD]`   = as.numeric(str_remove_all(str_remove(`Launched Price (USA)`, "USD"), ",")),
+    `Back Camera MP1`        = as.numeric(str_extract(str_split_fixed(`Back Camera`, "\\+", 2)[,1], "\\d+(?=MP)")),
+    `Back Camera MP2`        = as.numeric(str_extract(str_split_fixed(`Back Camera`, "\\+", 2)[,2], "\\d+(?=MP)")),
+    `Front Camera MP`        = as.numeric(str_extract(str_split_fixed(`Front Camera`, "/", 2)[,1], "\\d+(?=MP)")),
+    `Front Camera K`         = as.numeric(str_extract(str_split_fixed(`Front Camera`, "/", 2)[,2], "\\d+(?=K)"))
+  ) %>%
+  select(-`Mobile Weight`, -`Battery Capacity`, -`Launched Price (USA)`, -`Back Camera`, -`Front Camera`) %>%
+  mutate(
+    `Screen Size [inches]` = as.numeric(str_remove(`Screen Size`, "inches")),
+    `RAM [GB]`             = as.numeric(str_remove(`RAM`, "GB"))
+  ) %>%
+  select(-`Screen Size`, -`RAM`)
+
+kable(head(mobiles_data, 10),
+      caption = "First 10 rows of the dataset with standardized columns")
+```
+
+## 3. Sample Size Calculation
+
+```{r sample_size, echo=TRUE}
+delta <- 100
+sigma <- 175
+alpha <- 0.01
+beta  <- 0.01
+power <- 1 - beta
+
+z_alpha_2 <- qnorm(1 - alpha/2)
+z_beta    <- qnorm(power)
+
+n <- ((z_alpha_2 + z_beta) * sigma / delta)^2
+n_rounded <- ceiling(n)
+
+cat("Z critical values:\n",
+    "Z_{1-α/2} =", round(z_alpha_2, 3), "\n",
+    "Z_{1-β} =", round(z_beta, 3), "\n",
+    "Calculated sample size:", n, "\n",
+    "Rounded sample size:", n_rounded)
+```
+
+## 4. Descriptive Statistics
+
+```{r descriptive_statistics, echo=TRUE}
+summary_stats <- mobiles_data %>%
+  summarise(across(
+    c(`Mobile Weight [g]`,
+      `Battery Capacity [mAh]`,
+      `Launched Price [USD]`,
+      `Back Camera MP1`,
+      `Back Camera MP2`,
+      `Front Camera MP`,
+      `Front Camera K`,
+      `Screen Size [inches]`,
+      `RAM [GB]`),
+    list(
+      mean   = ~ mean(.x, na.rm = TRUE),
+      median = ~ median(.x, na.rm = TRUE),
+      min    = ~ min(.x, na.rm = TRUE),
+      max    = ~ max(.x, na.rm = TRUE),
+      sd     = ~ sd(.x, na.rm = TRUE)
+    )
+  )) %>%
+  pivot_longer(everything(),
+               names_to = c("Variable", "Statistic"),
+               names_sep = "_") %>%
+  pivot_wider(names_from = Statistic, values_from = value)
+
+kable(summary_stats,
+      caption = "Descriptive summary by variable",
+      digits = 2)
+```
+
+## 5. Correlation Analysis (CORRECTED)
+
+```{r correlation_significance, echo=TRUE}
+# Remove NA values explicitly (robust fix)
+filtered_data <- mobiles_data %>%
+  filter(
+    !is.na(`Launched Price [USD]`),
+    !is.na(`RAM [GB]`)
+  ) %>%
+  filter(
+    between(
+      `Launched Price [USD]`,
+      quantile(`Launched Price [USD]`, 0.25, na.rm = TRUE),
+      quantile(`Launched Price [USD]`, 0.75, na.rm = TRUE)
+    ),
+    between(
+      `RAM [GB]`,
+      quantile(`RAM [GB]`, 0.25, na.rm = TRUE),
+      quantile(`RAM [GB]`, 0.75, na.rm = TRUE)
+    )
+  )
+
+# Scatter plot
+ggplot(filtered_data, aes(x = `RAM [GB]`, y = `Launched Price [USD]`)) +
+  geom_point(alpha = 0.7, color = "#69b3a2", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Relationship between RAM and Launch Price",
+    x = "RAM [GB]",
+    y = "Launch Price [USD]"
+  ) +
+  theme_minimal()
+
+# Pearson correlation test
+pearson_test <- cor.test(
+  filtered_data$`RAM [GB]`,
+  filtered_data$`Launched Price [USD]`,
+  method = "pearson"
+)
+
+kable(
+  data.frame(
+    Correlation = round(pearson_test$estimate, 3),
+    p_value = format.pval(pearson_test$p.value, digits = 3)
+  ),
+  caption = "Pearson correlation between RAM and Launch Price"
+)
+
+"A weak but statistically significant positive correlation was found between RAM
+and launch price. Although higher RAM is associated with higher prices, the
+relationship is not strong, indicating that other factors play a more relevant role."
+```
+
+## 6. One-Sample t-Test
+
+```{r t_test, echo=TRUE}
+weights <- mobiles_data$`Mobile Weight [g]`
+
+t_test_result <- t.test(weights, mu = 180, alternative = "greater")
+print(t_test_result)
+
+"The one-sample t-test indicates that the average mobile phone weight is
+significantly greater than 180 grams (p < 0.001)."
+```
+
+## 7. Chi-Square Test of Independence
+
+```{r chi_square, echo=TRUE}
+median_battery <- median(mobiles_data$`Battery Capacity [mAh]`, na.rm = TRUE)
+
+mobiles_data <- mobiles_data %>%
+  mutate(
+    High_Battery = factor(
+      ifelse(`Battery Capacity [mAh]` >= median_battery, "High", "Low")
+    ),
+    Price_Category = cut(
+      `Launched Price [USD]`,
+      breaks = c(0, 500, 1000, Inf),
+      labels = c("Low", "Mid", "Premium")
+    )
+  )
+
+contingency <- table(mobiles_data$High_Battery, mobiles_data$Price_Category)
+chisq.test(contingency)
+```
+
+## 8. Bootstrap for IQR Uncertainty
+
+```{r bootstrap_iqr, echo=TRUE}
+prices <- na.omit(mobiles_data$`Launched Price [USD]`)
+iqr_original <- IQR(prices)
+
+set.seed(123)
+iqr_boot <- replicate(10000, IQR(sample(prices, replace = TRUE)))
+
+quantile(iqr_boot, c(0.025, 0.975))
+```
+
+## 9. Average Euclidean Distances
+
+```{r average_distances, echo=TRUE}
+mean_distance <- function(x, y) {
+  mean(as.matrix(dist(scale(cbind(x, y))))[
+    lower.tri(matrix(0, length(x), length(x)))
+  ])
+}
+
+distance_results <- data.frame(
+  Pair = c("Back vs Front Camera",
+           "Back Camera vs Weight",
+           "Front Camera vs Weight"),
+  Average_Distance = c(
+    mean_distance(mobiles_data$`Back Camera MP1`,
+                  mobiles_data$`Front Camera MP`),
+    mean_distance(mobiles_data$`Back Camera MP1`,
+                  mobiles_data$`Mobile Weight [g]`),
+    mean_distance(mobiles_data$`Front Camera MP`,
+                  mobiles_data$`Mobile Weight [g]`)
+  )
+)
+
+kable(distance_results,
+      caption = "Average Euclidean distances between variable pairs")
+```
+
+

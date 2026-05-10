@@ -1,0 +1,161 @@
+---
+title: "Correspondence and Network Analysis of Obesity-Related Data"
+author: "TURRI Valentín"
+date: "2025-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+# Global knitr options
+knitr::opts_chunk$set(echo = TRUE)
+
+# Required libraries
+library(readr)
+library(knitr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(factoextra)
+library(rrcov)
+library(cluster)
+library(FactoMineR)
+```
+
+## 1. Data
+
+We start by reading the data. The goal is to perform a correspondence analysis
+to explore relationships between weight and age.
+
+```{r data, echo=TRUE}
+# Read CSV file
+path <- "C:/Users/valen/OneDrive/Escritorio/Maestría en Ciencia de Datos/AID/TP4/obesidad.csv"
+obesity_stats <- read_csv(path, locale = locale(encoding = "UTF-8"))
+
+# Random sample of 500 cases
+set.seed(920)
+obesity_sample <- obesity_stats %>% sample_n(500)
+
+str(obesity_sample)
+```
+
+```{r categorization, echo=TRUE}
+obesity_sample <- obesity_sample %>%
+  mutate(
+    Weight_cat = cut(
+      Weight,
+      breaks = c(0, 50, 70, 90, 200),
+      labels = c("Low", "Normal", "High", "Very High"),
+      right = FALSE
+    ),
+    Age_cat = cut(
+      Age,
+      breaks = c(0, 18, 30, 50, 100),
+      labels = c("Young", "Young Adult", "Adult", "Older"),
+      right = FALSE
+    )
+  )
+```
+
+A contingency table is created.
+
+```{r contingency, echo=TRUE}
+# Create contingency table
+weight_age_table <- table(obesity_sample$Weight_cat, obesity_sample$Age_cat)
+
+# Display table
+kable(weight_age_table, caption = "Contingency table: Categorized Weight vs. Categorized Age")
+
+# Relative table (row proportions)
+relative_table <- prop.table(weight_age_table, margin = 1)
+relative_table_df <- as.data.frame(relative_table)
+colnames(relative_table_df) <- c("Weight_cat", "Age_cat", "Relative_frequency")
+
+# Bar chart
+ggplot(relative_table_df, aes(x = Weight_cat, y = Relative_frequency, fill = Age_cat)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(
+    title = "Age distribution by weight category",
+    x = "Weight category",
+    y = "Relative frequency"
+  ) +
+  theme_minimal()
+```
+
+A Chi-square independence test is performed to assess whether there is independence
+between the selected variables.
+
+```{r variable_selection, echo=TRUE}
+# Remove columns with all zeros (if any)
+weight_age_table_filtered <- weight_age_table[, colSums(weight_age_table) > 0]
+
+# Chi-square test (suppress warnings to avoid knit warnings, if desired)
+chi_test <- suppressWarnings(chisq.test(weight_age_table_filtered))
+
+# Show p-value in scientific notation
+cat(paste0("**p-value (Chi-square):** ", format(chi_test$p.value, scientific = TRUE), "<br>"))
+```
+
+The p-value is very small, so the data suggest some degree of dependence.
+
+```{r correspondence, echo=TRUE}
+# Simple Correspondence Analysis (CA)
+ca_result <- CA(weight_age_table_filtered, graph = FALSE)
+
+# Biplot
+fviz_ca_biplot(ca_result, repel = TRUE) +
+  ggtitle("Correspondence Analysis Biplot - Weight vs Age")
+```
+
+**Interpretation (CA):**
+
+- "Young" appears clearly separated in the upper-right quadrant, associated with "Low" and "Normal" weight categories, indicating that younger individuals tend to have lower weights.
+- "Young Adult" and "Very High" are positioned close to each other, suggesting that individuals in that age group more frequently present very high weights.
+- "Adult" appears relatively close to the "High" category, indicating some association between these two.
+- "Normal" and "Low" are fairly close, which may indicate there is no strong age differentiation among individuals in those weight categories.
+- Dimension 1 mainly separates weight levels (from "Very High" to "Low"), while Dimension 2 captures smaller differences, likely related to age extremes such as "Adult" and "Young".
+
+```{r select_columns_for_mca, include=TRUE, message=FALSE, warning=FALSE}
+# Select only categorical columns for MCA
+mca_vars <- obesity_sample %>%
+  select(SMOKE, Gender, family_history_with_overweight, MTRANS)
+
+# Display the first rows
+head(mca_vars)
+```
+
+```{r mca, include=TRUE, message=FALSE, warning=FALSE}
+# Apply MCA
+mca_result <- MCA(mca_vars, graph = FALSE)
+```
+
+```{r mca_visualization, include=TRUE, message=FALSE, warning=FALSE}
+# Visualize MCA biplot
+fviz_mca_biplot(
+  mca_result,
+  repel = TRUE,
+  ggtheme = theme_minimal()
+) +
+  ggtitle("Multiple Correspondence Analysis Biplot")
+```
+
+```{r contributions, include=TRUE, message=FALSE, warning=FALSE}
+# Variable contributions to Dimension 1
+cat("Contributions to Dimension 1:\n")
+print(fviz_contrib(mca_result, choice = "var", axes = 1, top = 10))
+
+# Variable contributions to Dimension 2
+cat("Contributions to Dimension 2:\n")
+print(fviz_contrib(mca_result, choice = "var", axes = 2, top = 10))
+```
+
+### Interpretation (MCA)
+
+**1. Multiple Correspondence Analysis Biplot**  
+The biplot shows the projection of individuals (blue) and variable categories (red) onto the first two MCA dimensions.
+
+**2. Contribution to Dimension 1**  
+The variables contributing the most to Dimension 1 are mainly the mode of transportation and gender. The category `MTRANS_Bike` stands out (around 35% contribution), indicating a strong differentiation from the rest. It is followed by `MTRANS_Automobile` (~18%), `Gender_Male` (~11%), `Gender_Female` (~9.5%), and `MTRANS_Motorbike` (~8%). This suggests Dimension 1 is strongly influenced by transportation preferences (with "Bike" as a distinctive behavior) and also by gender.
+
+**3. Contribution to Dimension 2**  
+For Dimension 2, the most influential categories are `MTRANS_Walking` (~30%), followed by `Gender_Male` (~18%), `Gender_Female` (~17%), and `MTRANS_Bike` (~16%). This dimension seems to reflect a combination of gender and preference for more accessible/active transportation (e.g., walking). The strong loading of `MTRANS_Walking` suggests this dimension could be interpreted as representing preference or access to less motorized transportation, differentiating certain gender and behavior profiles.
+

@@ -1,0 +1,417 @@
+---
+title: "Principal Component Analysis of FIFA 2024 Men Player Attributes"
+author: "TURRI Valentín"
+date: "2025-05-10"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+# Global knitr options
+knitr::opts_chunk$set(echo = TRUE)
+
+# Required libraries
+library(readr)
+library(knitr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(factoextra)
+library(rrcov)
+library(cluster)
+```
+
+## 1. Data
+
+```{r data, echo=TRUE}
+"The objective of this practical assignment is to apply PCA to reduce the dimensionality
+of the FIFA 2024 Men dataset, identify patterns in the data, and visualize how players
+are grouped according to their characteristics."
+
+# Define path and read CSV
+path <- "C:/Users/valen/OneDrive/Escritorio/Maestría en Ciencia de Datos/AID/TP3/player_stats.csv"
+player_stats <- read_csv(path, locale = locale(encoding = "UTF-8"))
+```
+
+```{r seed, echo=TRUE}
+"A random sample is taken from the FIFA 2024 Men database. The seed is set using the
+numbers 920."
+
+set.seed(920)
+player_sample <- sample_n(player_stats, 2000)
+
+# Display the sample
+head(player_sample)
+
+# Show the table in the HTML document:
+set.seed(123)  # Change to your last 3 digits
+player_sample <- sample_n(player_stats, 2000)
+
+kable(head(player_sample))
+```
+
+# 2. Exploratory Data Analysis and Pre-Processing
+
+## 2.1. Analyze the presence of missing or duplicated values.
+
+```{r missing_values, echo=TRUE}
+# We start by verifying the presence (or not) of missing values and/or duplicated data.
+
+# Identify rows with at least one NA
+rows_with_na <- player_sample[!complete.cases(player_sample), ]
+
+# How many rows have NA?
+cat("Number of rows with at least one NA:", nrow(rows_with_na), "\n")
+
+# For each row with NA, indicate which columns contain NA
+if (nrow(rows_with_na) > 0) {
+  na_by_row <- apply(rows_with_na, 1, function(x) names(x)[is.na(x)])
+  print(na_by_row)
+} else {
+  cat("There are no rows with missing values.\n")
+}
+
+# Duplicated rows (all columns identical)
+duplicates <- duplicated(player_sample)
+cat("Number of duplicated rows:", sum(duplicates), "\n")
+
+# Check for duplicated columns
+duplicated_cols <- duplicated(as.list(player_sample))  # Compare columns as lists
+duplicate_column_names <- names(player_sample)[duplicated_cols]
+
+if (length(duplicate_column_names) > 0) {
+  cat("Duplicated columns found:\n")
+  print(duplicate_column_names)
+} else {
+  cat("There are no duplicated columns.\n")
+}
+
+"- It is observed that there are 45 rows with missing values. These rows correspond to the 'Marking' column."
+"- It is observed that there are no fully duplicated rows."
+"- It is observed that there are no duplicated columns."
+```
+
+## 2.2. Select a subset of relevant variables to perform PCA. Justify the choice.
+
+```{r variable_selection, echo=TRUE}
+# We select numerical variables that reflect the physical, technical, and overall performance
+# characteristics of outfield players. These variables include attributes such as height,
+# weight, age, offensive and defensive skills, physical capabilities (speed, agility,
+# strength, etc.), and technical aspects (passing, shooting, dribbling, etc.).
+#
+# The goal of this choice is to comprehensively capture each player's sports profile in order
+# to reduce the dimensionality of the dataset without losing relevant information. In addition,
+# the variable "value" is included, as it acts as an economic synthesis of the player's skills,
+# incorporating an additional valuation dimension into the analysis.
+
+# Remove $ and thousand separators, then convert to numeric
+player_sample <- player_sample %>%
+  mutate(value = as.numeric(gsub("[$.]", "", value)))
+
+vars_pca <- player_sample %>%
+  select(height, weight, age,
+         ball_control, dribbling, slide_tackle, stand_tackle,
+         aggression, reactions, att_position, interceptions, vision, composure,
+         crossing, short_pass, long_pass, acceleration, stamina, strength,
+         balance, sprint_speed, agility, jumping, heading, shot_power,
+         finishing, long_shots, curve, fk_acc, penalties, volleys,
+         value)
+
+# Check structure
+str(vars_pca)
+```
+
+## 2.3. Description of the selected variables.
+
+```{r variable_description, echo=TRUE}
+# Create a table with variable descriptions
+variable_descriptions <- data.frame(
+  Variable = c("height", "weight", "age", "ball_control", "dribbling",
+               "slide_tackle", "stand_tackle", "aggression", "reactions",
+               "att_position", "interceptions", "vision", "composure",
+               "crossing", "short_pass", "long_pass", "acceleration",
+               "stamina", "strength", "balance", "sprint_speed", "agility",
+               "jumping", "heading", "shot_power", "finishing", "long_shots",
+               "curve", "fk_acc", "penalties", "volleys", "value"),
+  Description = c(
+    "Player height (cm).",
+    "Player weight (kg).",
+    "Player age (years).",
+    "Ball control when receiving.",
+    "Ability to carry the ball and evade opponents.",
+    "Effectiveness in sliding tackles.",
+    "Effectiveness in standing tackles.",
+    "Level of aggressiveness and determination.",
+    "Reaction time to stimuli.",
+    "Offensive positional awareness.",
+    "Ability to anticipate and intercept passes.",
+    "Ability to spot and assist teammates.",
+    "Performance under pressure.",
+    "Accuracy of crosses from the wings.",
+    "Accuracy of short passes.",
+    "Accuracy of long passes.",
+    "Initial acceleration.",
+    "Physical capacity to sustain effort.",
+    "Player physical strength.",
+    "Body stability while moving.",
+    "Speed in sustained runs.",
+    "Agility and ability to change direction.",
+    "Jumping ability.",
+    "Heading ability.",
+    "Shot power.",
+    "Finishing ability.",
+    "Ability to shoot from long range.",
+    "Curve applied to shots.",
+    "Free-kick accuracy.",
+    "Penalty accuracy.",
+    "Volley accuracy.",
+    "Player market value."
+  ),
+  stringsAsFactors = FALSE
+)
+
+# Display the table
+kable(variable_descriptions, caption = "Description of selected numerical variables for PCA")
+```
+
+## 2.4. Were the variables standardized? Justify.
+
+```{r standardization, echo=TRUE}
+# Standardization of numerical variables
+vars_pca_scaled <- scale(vars_pca)
+
+# Check summary of standardized data
+summary(vars_pca_scaled)
+
+"The selected numerical variables are standardized before applying PCA. This is justified
+because the variables have different scales (for example, height is measured in centimeters,
+weight in kilograms, and market value in millions)."
+
+"Without standardization, variables with larger scales would dominate the analysis,
+affecting the interpretation of the principal components."
+```
+
+# 3. PCA and Interpretation
+
+## 3.1. Perform PCA on the selected variables. How many components do you keep after dimensionality reduction?
+
+```{r pca_analysis, echo=TRUE}
+# Perform PCA on standardized data
+pca_result <- prcomp(vars_pca_scaled, center = TRUE, scale. = TRUE)
+
+# PCA summary: proportion of explained variance by each component
+summary(pca_result)
+
+# Scree plot (elbow plot)
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 50)) +
+  ggtitle("Explained variance by principal component") +
+  theme_minimal()
+
+# The first 10 principal components are retained because they explain more than 90% of the variance.
+```
+
+## 3.2. Interpret the loadings of the first principal components. Which player attributes are most represented in each component? Show the PCA biplot.
+
+```{r loadings, echo=TRUE}
+# Factor loadings
+loadings <- pca_result$rotation[, 1:2]
+
+# Show most influential variables for PC1 and PC2
+cat("Variables with the highest influence on PC1:\n")
+print(sort(abs(loadings[, 1]), decreasing = TRUE)[1:10])
+
+cat("\nVariables with the highest influence on PC2:\n")
+print(sort(abs(loadings[, 2]), decreasing = TRUE)[1:10])
+
+# Biplot
+fviz_pca_biplot(pca_result,
+                geom.ind = "point",      # Points for individuals (players)
+                col.ind = "steelblue",
+                pointshape = 21,
+                fill.ind = "lightblue",
+                col.var = "tomato",      # Variable arrows color
+                arrowsize = 0.8,
+                repel = TRUE) +
+  theme_minimal() +
+  ggtitle("PCA Biplot - Components 1 and 2")
+
+pca_result$rotation[, 1:2]
+
+# Extract and sort loadings for PC1
+loadings_pc1 <- pca_result$rotation[, 1] %>%
+  sort(decreasing = TRUE) %>%
+  head(10) %>%
+  round(3)
+
+# Create table
+table_pc1 <- tibble::tibble(
+  Variable = names(loadings_pc1),
+  `Loading PC1` = loadings_pc1
+)
+
+kable(table_pc1, caption = "Main loadings of the First Component (PC1)")
+
+# Extract and sort loadings for PC2
+loadings_pc2 <- pca_result$rotation[, 2] %>%
+  sort(decreasing = TRUE) %>%
+  head(10) %>%
+  round(3)
+
+# Create table
+table_pc2 <- tibble::tibble(
+  Variable = names(loadings_pc2),
+  `Loading PC2` = loadings_pc2
+)
+
+kable(table_pc2, caption = "Main loadings of the Second Component (PC2)")
+
+"The factor loadings analysis shows that the first principal component represents offensive technical skills,
+especially related to passing, shooting, and ball control. It can be interpreted as an offensive technical quality component.
+On the other hand, the second principal component represents physical and defensive attributes such as strength, height,
+aggressiveness, and marking ability. It can be interpreted as a physical-defensive profile component."
+```
+
+## 3.3. Identify whether there are natural groupings of players based on the selected characteristics. Interpret and conclude.
+
+```{r natural_clusters, echo=TRUE}
+# Determine the optimal number of clusters using the elbow method
+fviz_nbclust(pca_result$x[, 1:5], kmeans, method = "wss") +
+  ggtitle("Elbow method to determine the optimal number of clusters")
+
+set.seed(920)  # Reproducibility
+
+# Apply K-means on the first 5 components
+kmeans_result <- kmeans(pca_result$x[, 1:5], centers = 3, nstart = 25)
+
+# Add cluster to the original data
+player_sample$cluster <- as.factor(kmeans_result$cluster)
+
+# Biplot colored by cluster
+fviz_pca_biplot(pca_result, 
+                label = "none",
+                habillage = player_sample$cluster,
+                palette = "jco",
+                addEllipses = TRUE,
+                repel = TRUE) +
+  ggtitle("PCA Biplot with player clusters")
+
+"The blue cluster shows players with positive values on PC2 and moderate values on PC1. They could represent balanced players,
+perhaps midfielders or box-to-box midfielders. The yellow cluster shows players with high scores on PC1, which can be interpreted
+as offensive or technical players (e.g., forwards). Finally, the gray cluster shows values strongly shifted to the left on PC1.
+These players likely have lower overall performance. They could be young players, low-level defenders, or simply players with
+lower attribute values."
+```
+
+## 3.4. Choose a robust PCA technique and apply it to the dataset. Compare the results with the previous ones. Conclude.
+
+```{r robust_pca, echo=TRUE, message=FALSE, warning=FALSE}
+# Apply Robust PCA keeping all components
+library(rrcov)
+pca_robust <- PcaHubert(vars_pca_scaled, k = ncol(vars_pca_scaled), scale = FALSE, crit.pca.distances = 0.999)
+
+# Create a prcomp-compatible object
+fake_prcomp <- list(
+  sdev = sqrt(pca_robust@eigenvalues),
+  rotation = pca_robust@loadings,
+  center = pca_robust@center,
+  scale = pca_robust@scale,
+  x = pca_robust@scores
+)
+class(fake_prcomp) <- "prcomp"
+
+# Ensure same number of components as classical PCA
+n_comp <- min(length(pca_result$sdev), length(pca_robust@eigenvalues))
+
+# Compare explained variances
+variance_comparison <- data.frame(
+  Component = 1:n_comp,
+  Classical = round((pca_result$sdev[1:n_comp]^2 / sum(pca_result$sdev^2)) * 100, 2),
+  Robust = round((pca_robust@eigenvalues[1:n_comp] / sum(pca_robust@eigenvalues)) * 100, 2)
+)
+
+kable(variance_comparison, caption = "Comparison of explained variance")
+
+# Compare loadings (first 2 components only)
+loading_comparison <- data.frame(
+  Variable = rownames(pca_result$rotation),
+  PC1_Classical = round(pca_result$rotation[,1], 3),
+  PC1_Robust = round(pca_robust@loadings[,1], 3),
+  PC2_Classical = round(pca_result$rotation[,2], 3),
+  PC2_Robust = round(pca_robust@loadings[,2], 3)
+)
+
+kable(head(loading_comparison, 10), caption = "Comparison of factor loadings")
+
+# Adapted biplot
+fviz_pca_biplot(fake_prcomp,
+                geom.ind = "point",
+                col.ind = "steelblue",
+                col.var = "tomato",
+                repel = TRUE) +
+  ggtitle("Robust PCA Biplot") +
+  theme_minimal()
+
+# Clustering with the same number of components
+set.seed(920)
+kmeans_robust <- kmeans(pca_robust@scores[,1:n_comp], centers = 3, nstart = 25)
+player_sample$cluster_robust <- as.factor(kmeans_robust$cluster)
+
+# Comparative visualization
+gridExtra::grid.arrange(
+  fviz_pca_biplot(pca_result,
+                  habillage = player_sample$cluster,
+                  palette = "jco",
+                  title = "Classical PCA"),
+  fviz_pca_biplot(fake_prcomp,
+                  habillage = player_sample$cluster_robust,
+                  palette = "jco",
+                  title = "Robust PCA"),
+  ncol = 2
+)
+
+# Classical PCA loadings (first 2 components)
+classical_loadings <- pca_result$rotation[, 1:2] %>%
+  as.data.frame() %>%
+  rename(PC1_Classical = PC1, PC2_Classical = PC2) %>%
+  mutate(Variable = rownames(.)) %>%
+  select(Variable, everything())
+
+# Robust PCA loadings (first 2 components)
+robust_loadings <- pca_robust@loadings[, 1:2] %>%
+  as.data.frame() %>%
+  rename(PC1_Robust = PC1, PC2_Robust = PC2) %>%
+  mutate(Variable = rownames(.)) %>%
+  select(Variable, everything())
+
+# Combine both tables
+loadings_comparison_full <- classical_loadings %>%
+  inner_join(robust_loadings, by = "Variable") %>%
+  mutate(
+    Difference_PC1 = abs(PC1_Classical) - abs(PC1_Robust),
+    Difference_PC2 = abs(PC2_Classical) - abs(PC2_Robust)
+  ) %>%
+  arrange(desc(abs(PC1_Classical)))
+
+# Display comparative table
+kable(loadings_comparison_full, digits = 3, caption = "Comparison of factor loadings between classical and robust PCA")
+
+# Main differences analysis
+cat("Variables with the largest change in PC1 (Classical vs Robust):\n")
+top_changes_pc1 <- loadings_comparison_full %>%
+  arrange(desc(abs(Difference_PC1))) %>%
+  head(5)
+kable(top_changes_pc1)
+
+cat("\nVariables with the largest change in PC2 (Classical vs Robust):\n")
+top_changes_pc2 <- loadings_comparison_full %>%
+  arrange(desc(abs(Difference_PC2))) %>%
+  head(5)
+kable(top_changes_pc2)
+
+# Interpretation
+"Key Insights:
+1. Technical variables such as 'short_pass' and 'vision' gain importance in robust PCA for PC1
+2. Physical attributes ('strength', 'jumping') show lower relative weight in the robust method
+3. The variable 'value' keeps similar importance in both methods
+4. Greater stability is observed in defensive variables ('interceptions', 'stand_tackle')
+5. Robust PCA reduces the influence of outliers in extreme attributes ('sprint_speed', 'shot_power')"
+```

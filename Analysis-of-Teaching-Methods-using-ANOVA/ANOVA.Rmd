@@ -1,0 +1,176 @@
+---
+title: "Analysis of Teaching Methods Using ANOVA"
+author: "TURRI Valentín"
+date: "2025-06-03"
+output: html_document
+---
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+# Global knitr options
+knitr::opts_chunk$set(echo = TRUE)
+
+# Required libraries
+library(readr)
+library(knitr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+library(factoextra)
+library(rrcov)
+library(cluster)
+library(FactoMineR)
+library(car)
+```
+
+## *Problem Context*
+
+An educational researcher wants to evaluate the effectiveness of three different methods for teaching mathematical problem-solving. Eighteen students with similar characteristics were randomly selected and randomly assigned to one of the three methods (6 students per group). After 4 weeks of instruction, a standardized test was administered. The obtained scores were:
+
+```{r datos, echo=TRUE}
+# Read CSV file
+ruta <- "C:/Users/valen/OneDrive/Escritorio/Maestría en Ciencia de Datos/AID/TP5/datos.csv"
+
+estudiantes_stats <- read_csv(ruta, locale = locale(encoding = "UTF-8"))
+
+estudiantes_stats
+```
+
+## *1. Exploratory Analysis*
+
+*A) Compute for each method: Mean, Median, and Standard Deviation*
+
+```{r Analisis_Exploratorio, echo=TRUE}
+estudiantes_stats %>%
+  pivot_longer(cols = everything(), 
+               names_to = "metodo", 
+               values_to = "puntaje") %>%
+  group_by(metodo) %>%
+  summarise(
+    mean = mean(puntaje, na.rm = TRUE),
+    median = median(puntaje, na.rm = TRUE),
+    std_dev = sd(puntaje, na.rm = TRUE)
+  )
+```
+
+*B) Build a comparative boxplot for the three methods*
+
+```{r Boxplot, echo=TRUE}
+estudiantes_stats %>%
+  pivot_longer(cols = everything(),
+               names_to = "metodo",
+               values_to = "puntaje") %>%
+  ggplot(aes(x = metodo, y = puntaje, fill = metodo)) +
+  geom_boxplot() + 
+  labs(title = "Comparison of Teaching Methods",
+       x = "Method",
+       y = "Score") +
+  theme_minimal() + 
+  theme(legend.position = "none")
+```
+
+*C) Based on the descriptive statistics and the boxplot, formulate a preliminary hypothesis about which method might be more effective*
+
+According to the preliminary exploratory analysis, the three methods show fairly similar effectiveness, with a 10-point difference between the highest mean score (collaborative method) and the lowest mean score.
+
+More rigorously, the collaborative method has the highest average score, followed by the technological method, and finally the traditional method.
+
+In all cases, the standard deviation is approximately 2 points, indicating that the scores are highly concentrated around the mean.
+
+## *2. Assumption Verification*
+
+ANOVA requires three fundamental assumptions, which are verified below.
+
+### A) *Independence*
+
+The experimental design guarantees independence of observations for the following reasons:
+
+- **Random assignment:** Students were randomly assigned to the three teaching methods.
+- **Separate groups:** Each student participated in only one method.
+- **Individual assessment:** The standardized test was taken individually after instruction.
+
+### B) *Normality*
+
+Normality is evaluated using the Shapiro-Wilk test.
+
+```{r Shapiro_Wilk, echo=TRUE}
+datos_long <- estudiantes_stats %>%
+  pivot_longer(cols = everything(), names_to = "metodo", values_to = "puntaje")
+
+by(datos_long$puntaje, datos_long$metodo, shapiro.test)
+```
+
+Since all p-values are greater than 0.05, normality is not rejected for any group.
+
+```{r Residuals, echo=TRUE}
+modelo_anova <- aov(puntaje ~ metodo, data = datos_long)
+residuos <- residuals(modelo_anova)
+shapiro.test(residuos)
+```
+
+```{r QQplot, echo=TRUE}
+qqnorm(residuos)
+qqline(residuos, col = "red", lwd = 2)
+```
+
+The Q-Q plot shows that residuals closely follow the normal distribution.
+
+### C) *Homoscedasticity*
+
+```{r Levene, echo=TRUE}
+leveneTest(puntaje ~ metodo, data = datos_long)
+```
+
+The p-value equals 1, so equal variances are assumed.
+
+## *3. Analysis of Variance*
+
+### A) Hypotheses
+
+\[
+H_0: \mu_1 = \mu_2 = \mu_3
+\]
+
+\[
+H_1: \exists\, i, j \text{ such that } \mu_i \ne \mu_j
+\]
+
+### B) Why not multiple t-tests?
+
+Multiple t-tests increase the probability of committing a Type I error. ANOVA controls this risk by performing a single global test.
+
+### C) Interpretation of the F statistic
+
+The F statistic compares variability between groups to variability within groups. Large F values indicate that at least one group mean differs significantly.
+
+### D) Decision rule
+
+```{r ANOVA, echo=TRUE}
+summary(modelo_anova)
+qf(0.95, df1 = 2, df2 = 15)
+```
+
+Since the observed F is greater than the critical F and the p-value is below 0.05, the null hypothesis is rejected.
+
+## *4. Post-Hoc Comparisons*
+
+```{r Tukey, echo=TRUE}
+tukey <- TukeyHSD(modelo_anova)
+tukey
+plot(tukey)
+```
+
+All method pairs differ significantly.
+
+## *5. Critical Analysis*
+
+### Limitations
+
+- Small sample size (18 students)
+- Possible artificial data construction
+- Perfectly equal standard deviations
+- Extremely regular mean spacing
+
+### Extreme outlier discussion
+
+Robust methods (e.g., Kruskal-Wallis) may be used, or justified exclusion if measurement error is proven.

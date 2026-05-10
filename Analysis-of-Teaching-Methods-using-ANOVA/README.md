@@ -1,0 +1,1 @@
+This study compares three teaching methods for mathematical problem-solving using ANOVA. Exploratory analysis, assumption verification, and post-hoc tests reveal statistically significant differences among methods, highlighting the collaborative approach as the most effective while discussing practical relevance and study limitations.
